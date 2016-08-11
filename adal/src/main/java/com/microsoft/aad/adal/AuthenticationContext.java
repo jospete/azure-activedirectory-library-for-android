@@ -29,9 +29,11 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
 import android.os.NetworkOnMainThreadException;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.util.SparseArray;
@@ -849,7 +851,82 @@ public class AuthenticationContext {
             redirectUri = inputRedirectUri;
         }
 
+        //check the permissions required for the broker usage
+        if (AuthenticationSettings.INSTANCE.getUseBroker()) {
+            try {
+                checkBrokerPermissions();
+            } catch (final UsageAuthenticationException exception) {
+                callback.onError(exception);
+            }
+        }
+
         return redirectUri;
+    }
+
+    /**
+     * To verify if App gives permissions to AccountManager to use broker. 
+     * If target version is lower than 23, calling app has to have GET_ACCOUNTS, 
+     * MANAGE_ACCOUNTS, USE_CREDENTIALS permissions granted in the Manifest.xml.
+     * Beginning in Android 6.0, the run-time permission GET_ACCOUNTS is required
+     * which need to be requested in the runtime by the calling app.
+     * 
+     * @return true if all required permissions are granted, otherwise the exception will be thrown.
+     * @throws UsageAuthenticationException 
+     */
+    private boolean checkBrokerPermissions() throws UsageAuthenticationException {
+        final String methodName = ":checkBrokerPermissions";
+        final PackageManager pm = mContext.getPackageManager();
+        final StringBuilder permissionMissing = new StringBuilder();
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            Logger.v(
+                    TAG + methodName,
+                    "Broker related permissions checking starts.");
+
+            if (PackageManager.PERMISSION_GRANTED != pm.checkPermission("android.permission.GET_ACCOUNTS", mContext.getPackageName())) {
+                    //ContextCompat.checkSelfPermission(mContext, "android.permission.GET_ACCOUNTS")) {
+                permissionMissing.append("GET_ACCOUNTS ");
+                Logger.w(
+                        TAG + methodName,
+                        "Broker related permissions are missing for GET_ACCOUNTS",
+                        "", ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING);
+            }
+
+            if (PackageManager.PERMISSION_GRANTED != pm.checkPermission("android.permission.MANAGE_ACCOUNTS", mContext.getPackageName())) {
+                    //ContextCompat.checkSelfPermission(mContext, "android.permission.MANAGE_ACCOUNTS")) {
+                permissionMissing.append("MANAGE_ACCOUNTS ");
+                Logger.w(
+                        TAG + methodName,
+                        "Broker related permissions are missing for MANAGE_ACCOUNTS",
+                        "", ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING);
+            }
+
+            if (PackageManager.PERMISSION_GRANTED != pm.checkPermission("android.permission.USE_CREDENTIALS", mContext.getPackageName())) {
+                    //ContextCompat.checkSelfPermission(mContext, "android.permission.USE_CREDENTIALS")) {
+                permissionMissing.append("USE_CREDENTIALS ");
+                Logger.w(
+                        TAG + methodName,
+                        "Broker related permissions are missing for USE_CREDENTIALS",
+                        "", ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING);
+            }
+        } else {
+            if (PackageManager.PERMISSION_GRANTED != pm.checkPermission("android.permission.GET_ACCOUNTS", mContext.getPackageName())) {
+                    //ContextCompat.checkSelfPermission(mContext, "android.permission.GET_ACCOUNTS")) {
+                permissionMissing.append("GET_ACCOUNTS");
+                Logger.w(
+                        TAG + methodName,
+                        "Broker related permissions are missing for GET_ACCOUNTS",
+                        "", ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING);
+            }
+        }
+
+        if (permissionMissing.length() == 0) {
+            return true;
+        } else {
+            throw new UsageAuthenticationException(
+                    ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING, 
+                    "Broker related permissions are missing for " + permissionMissing.toString());
+        }
     }
 
     private AcquireTokenRequest createAcquireTokenRequest() {

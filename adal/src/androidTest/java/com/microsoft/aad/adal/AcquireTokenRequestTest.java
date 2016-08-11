@@ -36,6 +36,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.Signature;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.test.AndroidTestCase;
@@ -781,6 +782,98 @@ public final class AcquireTokenRequestTest extends AndroidTestCase {
         }
     }
     
+    @SmallTest
+    public void testVerifyManifestPermission_valid() throws InterruptedException, PackageManager.NameNotFoundException {
+        final FileMockContext mockContext = createMockContext();
+        AuthenticationSettings.INSTANCE.setUseBroker(true);
+        final AuthenticationContext authContext = new AuthenticationContext(mockContext,
+                VALID_AUTHORITY, false);
+        final TestAuthCallback callback = new TestAuthCallback();
+        authContext.acquireToken(Mockito.mock(Activity.class), "resource", "clientid", authContext.getRedirectUriForBroker(),
+                "loginHint", callback);
+
+        assertNull(callback.getCallbackException());
+    }
+
+    public void testVerifyManifestPermission_missingPermission_MANAGE_ACCOUNTS() throws InterruptedException, PackageManager.NameNotFoundException {
+        final FileMockContext mockContext = createMockContext();
+        mockContext.removePermission("android.permission.MANAGE_ACCOUNTS");
+        AuthenticationSettings.INSTANCE.setUseBroker(true);
+        
+        final AuthenticationContext authContext = new AuthenticationContext(mockContext,
+                VALID_AUTHORITY, false);
+        final TestAuthCallback callback = new TestAuthCallback();
+        authContext.acquireToken(Mockito.mock(Activity.class), "resource", "clientid", authContext.getRedirectUriForBroker(),
+                "loginHint", callback);
+
+        assertNotNull(callback.getCallbackException());
+        assertTrue(callback.getCallbackException() instanceof UsageAuthenticationException);
+        final UsageAuthenticationException usageAuthenticationException
+                = (UsageAuthenticationException) callback.getCallbackException();
+        assertTrue(usageAuthenticationException.getMessage().contains("MANAGE_ACCOUNTS"));
+        assertEquals(ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING, usageAuthenticationException.getCode());
+    }
+
+    public void testVerifyManifestPermission_missingPermission_USE_CREDENTIALS() throws InterruptedException, PackageManager.NameNotFoundException {
+        final FileMockContext mockContext = createMockContext();
+        mockContext.removePermission("android.permission.USE_CREDENTIALS");
+        AuthenticationSettings.INSTANCE.setUseBroker(true);
+        final AuthenticationContext authContext = new AuthenticationContext(mockContext,
+                VALID_AUTHORITY, false);
+        final TestAuthCallback callback = new TestAuthCallback();
+        authContext.acquireToken(Mockito.mock(Activity.class), "resource", "clientid", authContext.getRedirectUriForBroker(),
+                "loginHint", callback);
+
+        assertNotNull(callback.getCallbackException());
+        assertTrue(callback.getCallbackException() instanceof UsageAuthenticationException);
+        final UsageAuthenticationException usageAuthenticationException
+                = (UsageAuthenticationException) callback.getCallbackException();
+        assertTrue(usageAuthenticationException.getMessage().contains("USE_CREDENTIALS"));
+        assertEquals(ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING, usageAuthenticationException.getCode());
+    }
+
+     public void testVerifyManifestPermission_missingPermission_MANAGE_ACCOUNTS_USE_CREDENTIALS() throws InterruptedException, PackageManager.NameNotFoundException {
+         final FileMockContext mockContext = createMockContext();
+         mockContext.removePermission("android.permission.MANAGE_ACCOUNTS");
+         mockContext.removePermission("android.permission.USE_CREDENTIALS");
+
+         AuthenticationSettings.INSTANCE.setUseBroker(true);
+         final AuthenticationContext authContext = new AuthenticationContext(mockContext,
+                 VALID_AUTHORITY, false);
+         final TestAuthCallback callback = new TestAuthCallback();
+         authContext.acquireToken(Mockito.mock(Activity.class), "resource", "clientid", authContext.getRedirectUriForBroker(),
+                 "loginHint", callback);
+         final CountDownLatch signal = new CountDownLatch(1);
+         signal.await(ACTIVITY_TIME_OUT, TimeUnit.MILLISECONDS);
+
+         assertNotNull(callback.getCallbackException());
+         assertTrue(callback.getCallbackException() instanceof UsageAuthenticationException);
+         final UsageAuthenticationException usageAuthenticationException
+                 = (UsageAuthenticationException) callback.getCallbackException();
+         assertTrue(usageAuthenticationException.getMessage().contains("MANAGE_ACCOUNTS"));
+         assertTrue(usageAuthenticationException.getMessage().contains("USE_CREDENTIALS"));
+         assertEquals(ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING, usageAuthenticationException.getCode());
+     }
+
+    public void testVerifyManifestPermission_missingPermission_GET_ACCOUNTS() throws InterruptedException, PackageManager.NameNotFoundException {
+        final FileMockContext mockContext = createMockContext();
+        mockContext.removePermission("android.permission.GET_ACCOUNTS");
+        AuthenticationSettings.INSTANCE.setUseBroker(true);
+        
+        final AuthenticationContext authContext = new AuthenticationContext(mockContext,
+                VALID_AUTHORITY, false);
+        final TestAuthCallback callback = new TestAuthCallback();
+        authContext.acquireToken(Mockito.mock(Activity.class), "resource", "clientid", authContext.getRedirectUriForBroker(),
+                "loginHint", callback);
+
+        assertNotNull(callback.getCallbackException());
+        assertTrue(callback.getCallbackException() instanceof UsageAuthenticationException);
+        final UsageAuthenticationException usageAuthenticationException
+                = (UsageAuthenticationException) callback.getCallbackException();
+        assertTrue(usageAuthenticationException.getMessage().contains("GET_ACCOUNTS"));
+        assertEquals(ADALError.DEVELOPER_BROKER_PERMISSIONS_MISSING, usageAuthenticationException.getCode());
+    }
+    
     private FileMockContext createMockContext()
             throws PackageManager.NameNotFoundException {
 
@@ -881,12 +974,18 @@ public final class AcquireTokenRequestTest extends AndroidTestCase {
         final PackageManager mockedPackageManager = Mockito.mock(PackageManager.class);
         when(mockedPackageManager.getPackageInfo(Mockito.anyString(), Mockito.anyInt())).thenReturn(mockedPackageInfo);
         //mock permission
-        when(mockedPackageManager.checkPermission(Mockito.refEq("android.permission.GET_ACCOUNTS"),
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            when(mockedPackageManager.checkPermission(Mockito.refEq("android.permission.GET_ACCOUNTS"),
                 Mockito.anyString())).thenReturn(PackageManager.PERMISSION_GRANTED);
-        when(mockedPackageManager.checkPermission(Mockito.refEq("android.permission.MANAGE_ACCOUNTS"),
+            when(mockedPackageManager.checkPermission(Mockito.refEq("android.permission.MANAGE_ACCOUNTS"),
+                    Mockito.anyString())).thenReturn(PackageManager.PERMISSION_GRANTED);
+            when(mockedPackageManager.checkPermission(Mockito.refEq("android.permission.USE_CREDENTIALS"),
+                    Mockito.anyString())).thenReturn(PackageManager.PERMISSION_GRANTED);
+        } else {
+            when(mockedPackageManager.checkPermission(Mockito.refEq("android.permission.GET_ACCOUNTS"),
                 Mockito.anyString())).thenReturn(PackageManager.PERMISSION_GRANTED);
-        when(mockedPackageManager.checkPermission(Mockito.refEq("android.permission.USE_CREDENTIALS"),
-                Mockito.anyString())).thenReturn(PackageManager.PERMISSION_GRANTED);
+        }
+        
 
         // Mock intent query
         final List<ResolveInfo> activities = new ArrayList<>(1);
