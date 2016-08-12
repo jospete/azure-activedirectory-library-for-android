@@ -61,6 +61,10 @@ class Oauth2 {
     private final static String DEFAULT_AUTHORIZE_ENDPOINT = "/oauth2/authorize";
 
     private final static String DEFAULT_TOKEN_ENDPOINT = "/oauth2/token";
+    
+    private final static String B2C_AUTHORIZE_ENDPOINT = "/oauth2/v2.0/authorize";
+
+    private final static String B2C_TOKEN_ENDPOINT = "/v2.0/oauth2/token";
 
     private final static String JSON_PARSING_ERROR = "It failed to parse response as json";
 
@@ -84,11 +88,11 @@ class Oauth2 {
     }
 
     public String getAuthorizationEndpoint() {
-        return mRequest.getAuthority() + DEFAULT_AUTHORIZE_ENDPOINT;
+        return mRequest.getAuthority() + B2C_AUTHORIZE_ENDPOINT;
     }
 
     public String getTokenEndpoint() {
-        return mRequest.getAuthority() + DEFAULT_TOKEN_ENDPOINT;
+        return mRequest.getAuthority() + B2C_TOKEN_ENDPOINT;
     }
 
     public String getAuthorizationEndpointQueryParameters() throws UnsupportedEncodingException {
